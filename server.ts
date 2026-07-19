@@ -12,7 +12,7 @@ import { GoogleGenAI } from '@google/genai';
 dotenv.config();
 
 const app = express();
-const PORT = 3050; // wait, let's keep server settings or change them as needed
+const PORT = 3000;
 
 app.use(express.json({ limit: '10mb' }));
 

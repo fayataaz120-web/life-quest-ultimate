@@ -1,0 +1,6 @@
+{
+  "name": "Life Quest Ultimate",
+  "description": "An epic RPG-inspired personal development system that transforms real life into an adventure game with stats, quests, skills, and long-term logging.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

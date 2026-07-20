@@ -129,7 +129,8 @@ export const getCompanionStageInfo = (level: number): CompanionStageInfo => {
 export const sendCompanionChatMessage = async (
   state: any,
   companion: any,
-  message: string
+  message: string,
+  gatewayConfig?: any
 ): Promise<{ reply: string; emotion: string }> => {
   try {
     const res = await fetch('/api/companion-chat', {
@@ -137,7 +138,7 @@ export const sendCompanionChatMessage = async (
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ state, companion, message }),
+      body: JSON.stringify({ state, companion, message, gatewayConfig }),
     });
 
     if (!res.ok) {

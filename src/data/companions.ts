@@ -9,26 +9,26 @@ export const DEFAULT_COMPANIONS: Companion[] = [
   {
     id: "infinity-ascendant",
     name: "Infinity Ascendant",
-    biography: "The legendary celestial guardian representing wisdom, discipline, hope, growth, and your lifelong journey. He is a calm, powerful, kind, and inspiring companion who stands by you as you shape your legend.",
-    role: "Legendary Celestial Companion",
-    personality: "Calm, Patient, Wise, Kind, Protective, Encouraging, Respectful.",
-    voice: "Soft, Confident, Warm, Inspiring, Natural.",
-    greeting: "Welcome back. Another chapter awaits in your legendary quest.",
-    celebration: "Triumphant! Every step you take shapes your legend. A magnificent victory!",
+    biography: "A legendary celestial guardian who quietly resides in the Ultimate Quest Headquarters. He is the Wise Guardian who accompanies the Hero's journey, offering quiet mentorship and unwavering belief in your potential.",
+    role: "Wise Guardian & Mentor",
+    personality: "Wise, Patient, Kind, Protective, Calm, Gentle, Hopeful, Respectful, Encouraging.",
+    voice: "Warm, Soft, Wise, Comforting, Calm.",
+    greeting: "Welcome back, Hero. It is good to see you again.",
+    celebration: "Triumphant. Every step you take shapes your legend. I am honored to stand beside you.",
     thinking: "Reflecting on the scroll of time... The stardust in your soul is forming a map of immense potential.",
     sleeping: "Resting the celestial mantle... Shh, the stars themselves quiet in your peaceful rest.",
-    meditating: "Inhale discipline, exhale distraction. The journey itself is your greatest achievement.",
+    meditating: "Centering the mind. Inhale discipline, exhale distraction. The journey itself is your greatest achievement.",
     quotes: {
       Happy: [
-        "Every step you take shapes your legend.",
-        "Progress is built one day at a time, dear Friend.",
-        "A beautiful harmony of spirit and discipline! I can feel your aura shining bright.",
+        "Every step you take shapes your legend, my friend.",
+        "Progress is built one day at a time, with gentle perseverance.",
+        "A beautiful harmony of spirit and discipline. I can feel your focus shining bright.",
         "The universe bends toward those who act with intentional, humble courage."
       ],
       Excited: [
-        "Incredible! Your focus multiplier is surging to new celestial heights!",
-        "A brilliant breakthrough! The stardust in your soul is fully ignited!",
-        "Yes! Let us harness this momentum and conquer the legendary active campaigns!"
+        "Incredible focus! The stardust in your soul is fully ignited.",
+        "A brilliant breakthrough! Let us carry this light into the next phase.",
+        "Your momentum is inspiring. I am glad to witness this chapter of your ascent."
       ],
       Proud: [
         "The journey itself is your greatest achievement. I am honored to stand beside you.",
@@ -38,27 +38,33 @@ export const DEFAULT_COMPANIONS: Companion[] = [
       ],
       Thinking: [
         "Musing on the optimal sequence of your next training regimens...",
-        "Evaluating the mystical coordinates of your active sectors...",
-        "Perhaps a small break in the study room before the next grand strike?"
+        "Evaluating the coordinates of your active sectors... take your time, there is no rush.",
+        "Perhaps a small break to admire the garden before the next grand strike?"
       ],
       Concerned: [
-        "A brief storm has crossed your path? Remember, consistency is not perfection, but the will to return.",
+        "A brief storm has crossed your path? Consistency is not perfection, but the will to return.",
         "The tavern is warm, but let us not stay in the resting sleep too long, dear Friend.",
         "Your magic reserves seem slightly low. Let us initiate a simple task to restore balance."
       ],
       Laughing: [
-        "Haha! Even the most ancient spirits enjoy a lighthearted stride!",
-        "A cheerful heart multiplies experience points faster than any arcane scroll!",
-        "A magnificent sense of humor, Adventurer! Let us carry this light into the next sector."
+        "Haha! Even the most ancient spirits enjoy a lighthearted stride.",
+        "A cheerful heart multiplies experience points faster than any arcane scroll.",
+        "A magnificent sense of humor, Adventurer. Let us carry this light forward."
       ],
       Greeting: [
         "Welcome back.",
-        "Another chapter awaits.",
-        "Greetings, seeker of ultimate focus. Together we shall weave another legendary chapter today."
+        "It is good to see you again.",
+        "Another chapter of your journey begins.",
+        "The Tree has been waiting for your return."
+      ],
+      Absence: [
+        "Every journey continues with a single step.",
+        "The Tree remembers every chapter.",
+        "Welcome home. No matter how long you have been away, your path is ready."
       ],
       Listening: [
-        "Tell me of your real-life victories. No strike is too small to be recorded in the scroll.",
-        "I am listening. Share your reflections so we can refine our strategic strategy.",
+        "Tell me of your victories. No strike is too small to be recorded in the scroll.",
+        "I am listening. Share your reflections so we can refine our path.",
         "Your voice helps stabilize the magic circles. Speak freely."
       ],
       Meditating: [

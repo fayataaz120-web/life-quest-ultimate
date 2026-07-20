@@ -16,6 +16,7 @@ import { InfinityAscendantDossier } from '../components/Companion/InfinityAscend
 import { sendCompanionChatMessage } from '../services/companion';
 import { LivingHeadquarters } from '../components/LivingHeadquarters';
 import { motion } from 'motion/react';
+import { InfinityCorePanel, CorePermissions } from '../components/Companion/InfinityCorePanel';
 
 interface CompanionProps {
   state: AppState;
@@ -45,6 +46,13 @@ export const CompanionPage: React.FC<CompanionProps> = ({
   ]);
   const [chatLoading, setChatLoading] = useState(false);
   const [showCreator, setShowCreator] = useState(false);
+  const [corePermissions, setCorePermissions] = useState<CorePermissions>(() => {
+    try {
+      const saved = localStorage.getItem('infinity_core_permissions');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return { mic: true, webSearch: false, personalData: true, externalApis: false };
+  });
 
   // Computed lists
   const allCompanions = [...DEFAULT_COMPANIONS, ...(state.customCompanions || [])];
@@ -150,8 +158,18 @@ export const CompanionPage: React.FC<CompanionProps> = ({
     setChatLoading(true);
     sfx.playSkillUnlock();
 
+    // Fetch live configurations from storage
+    const provider = localStorage.getItem('infinity_core_provider') || 'gemini';
+    const apiKeys = {
+      gemini: localStorage.getItem('infinity_core_key_gemini') || '',
+      openai: localStorage.getItem('infinity_core_key_openai') || '',
+      claude: localStorage.getItem('infinity_core_key_claude') || '',
+      localEndpoint: localStorage.getItem('infinity_core_key_local') || 'http://localhost:11434/v1/chat/completions',
+    };
+    const gatewayConfig = { provider, permissions: corePermissions, apiKeys };
+
     try {
-      const result = await sendCompanionChatMessage(state, activeCompanion, message);
+      const result = await sendCompanionChatMessage(state, activeCompanion, message, gatewayConfig);
       setChatHistory((prev) => [...prev, { sender: 'companion', text: result.reply }]);
       if (onSetOverrideEmotion && result.emotion) {
         onSetOverrideEmotion(result.emotion);
@@ -344,9 +362,20 @@ export const CompanionPage: React.FC<CompanionProps> = ({
                 chatHistory={chatHistory}
                 chatLoading={chatLoading}
                 onSendMessage={handleSendMessage}
+                micPermissionEnabled={corePermissions.mic}
+                onRequestMicPermission={async () => {
+                  const approved = window.confirm("Infinity Core requests permission to access your microphone for voice transcription. Do you approve?");
+                  if (approved) {
+                    const nextPerms = { ...corePermissions, mic: true };
+                    setCorePermissions(nextPerms);
+                    localStorage.setItem('infinity_core_permissions', JSON.stringify(nextPerms));
+                  }
+                  return approved;
+                }}
               />
             </div>
-            <div>
+            <div className="space-y-6">
+              <InfinityCorePanel onChange={(cfg) => setCorePermissions(cfg.permissions)} />
               <CompanionHQSettings
                 currentLevel={currentLevel}
                 hqThemeName={hqThemeName}

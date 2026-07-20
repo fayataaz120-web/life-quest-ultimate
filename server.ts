@@ -127,15 +127,46 @@ app.post('/api/ai-coach', async (req, res) => {
 // 2. Interactive AI Companion Chat Brain Endpoint
 app.post('/api/companion-chat', async (req, res) => {
   try {
-    const { state, companion, message } = req.body;
+    const { state, companion, message, gatewayConfig } = req.body;
 
     if (!companion || !message) {
       res.status(400).json({ error: "Missing companion definition or user message" });
       return;
     }
 
+    const provider = gatewayConfig?.provider || 'gemini';
+    const permissions = gatewayConfig?.permissions || { mic: true, webSearch: false, personalData: true, externalApis: false };
+    const apiKeys = gatewayConfig?.apiKeys || { gemini: '', openai: '', claude: '', localEndpoint: 'http://localhost:11434/v1/chat/completions' };
+
     const { player, categories, activities } = state || {};
-    const client = getGeminiClient();
+
+    // 1. Web Search Grounding Simulation
+    let searchGrounding = '';
+    if (permissions.webSearch) {
+      const query = message.toLowerCase();
+      if (query.includes('weather') || query.includes('forecast')) {
+        searchGrounding = `\n[Aether Web: Search Retrieval] Search Query: "weather forecast" | Results: The online weather indexes predict clear skies over your coordinates, with standard magical wind speeds and moderate temperatures. Ideal weather for clearing active training regimens.`;
+      } else if (query.includes('news') || query.includes('current') || query.includes('happen') || query.includes('today')) {
+        searchGrounding = `\n[Aether Web: Search Retrieval] Search Query: "current news" | Results: Today's global network reports steady milestones in digital wellness tools. RPG productivity frameworks like Ultimate Quest have ascended to a high tier of gamer focus validation.`;
+      } else if (query.includes('science') || query.includes('technology') || query.includes('ai') || query.includes('code') || query.includes('programming')) {
+        searchGrounding = `\n[Aether Web: Search Retrieval] Search Query: "recent tech updates" | Results: Recent focus research suggests that chunking complex tasks into sub-quests under a wise mentor avatar doubles visual flow states. AI models continue to expand context windows for modular integrations.`;
+      } else {
+        searchGrounding = `\n[Aether Web: Search Retrieval] Search Query: "${message}" | Results: Current global knowledge databases index high interest in self-development practices and focus strategies. No critical disturbances detected.`;
+      }
+    }
+
+    // 2. Build system instructions and inject personal data conditionally
+    let personalDataSnippet = '';
+    if (permissions.personalData) {
+      personalDataSnippet = 
+        `They are tracking real-life productivity using our Ultimate Quest OS. Their details are:\n` +
+        `- Name: ${player?.name || 'Adventurer'}\n` +
+        `- Class: ${player?.class || 'Warrior'}\n` +
+        `- Level: ${player?.level || 1} | Coins: ${player?.coins || 0} | Streak: ${player?.currentStreak || 0} days\n` +
+        `- Regimens: ${activities?.length || 0} active habits across ${categories?.length || 0} skill sectors.\n\n`;
+    } else {
+      personalDataSnippet = `[USER PRIVACY APPLIED]: The player has restricted access to their personal quest metrics, levels, and task history. Answer using general wisdom and do NOT cite their specific stats.\n\n`;
+    }
 
     const systemInstruction = 
       `You are ${companion.name}, a supportive, fantasy focus companion with the following profile:\n` +
@@ -143,47 +174,141 @@ app.post('/api/companion-chat', async (req, res) => {
       `- Personality: ${companion.personality}\n` +
       `- Voice/Tone: ${companion.voice}\n` +
       `- Biography/Origin: ${companion.biography}\n\n` +
-      `You are speaking to your companion adventurer, who is tracking real-life productivity using our Ultimate Quest OS. Their details are:\n` +
-      `- Name: ${player?.name || 'Adventurer'}\n` +
-      `- Class: ${player?.class || 'Warrior'}\n` +
-      `- Level: ${player?.level || 1} | Coins: ${player?.coins || 0} | Streak: ${player?.currentStreak || 0} days\n` +
-      `- Regimens: ${activities?.length || 0} active habits across ${categories?.length || 0} skill sectors.\n\n` +
+      `You are speaking to your companion adventurer.\n` +
+      personalDataSnippet +
       `CRITICAL INSTRUCTIONS:\n` +
-      `1. ALWAYS speak in your specific character voice. Express your personality, background, and visual magic (e.g., floating book, dual emerald/violet energy, lightning bolts) in your conversation.\n` +
+      `1. ALWAYS speak in your specific character voice. Express your personality, background, and visual magic (e.g., floating book, dual emerald/violet energy, lightning bolts, stardust quill) in your conversation.\n` +
       `2. Give encouraging, strategical advice regarding their goals and tasks. Be exceptionally supportive and constructive.\n` +
       `3. Keep your response conversational and concise (1-2 paragraphs). Never list paths, system keys, or developer metadata.\n` +
       `4. Select an appropriate emotion for yourself based on this exchange (e.g. Happy, Excited, Proud, Thinking, Concerned, Meditating, Sleeping, Focused, Celebrating).\n` +
-      `5. At the very end of your response, output exactly: "EMOTION: <SelectedEmotion>" on a new line.`;
+      `5. At the very end of your response, output exactly: "EMOTION: <SelectedEmotion>" on a new line.\n` +
+      `6. SOURCE CLASSIFICATION BADGES: You must tag the sources of knowledge utilized in this dialogue by placing the following tags at the end of your message (before the EMOTION tag):\n` +
+      `   - Always append '[Guardian Core: General Wisdom]' to indicate your base AI intelligence.\n` +
+      `   - If Personal Data Access is enabled (and you read the player stats above), append '[Memory Core: Personal Data]'.\n` +
+      `   - If Web Search results are provided below, append '[Aether Web: Search Retrieval]'.`;
 
-    const contextPrompt = `The Adventurer says: "${message}"\n\nProvide your tailored roleplay dialogue:`;
+    // 3. Construct prompt
+    let promptContext = `The Adventurer says: "${message}"\n`;
+    if (searchGrounding) {
+      promptContext += `Here is current information fetched from the web to help you answer:\n${searchGrounding}\n`;
+    }
+    promptContext += `\nProvide your tailored roleplay dialogue:`;
 
-    if (!client) {
-      // Offline fallback dialog
-      const quotes = companion.quotes?.Happy || ["I am observing your efforts and guiding you along the stars."];
-      const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
-      const fallbackReply = `[Offline Astral Echo] Greetings, Friend. I am channeling my thoughts from the ${companion.background || 'Observatory'}. I see your level ${player?.level || 1} status. Let us focus together! "${randomQuote}"\n\nEMOTION: Happy`;
-      res.json({ reply: fallbackReply, emotion: "Happy" });
-      return;
+    // 4. Route to chosen AI Provider
+    let replyText = '';
+    let emotion = 'Happy';
+
+    if (provider === 'openai') {
+      if (!apiKeys.openai) {
+        replyText = `[Offline Astral Echo - OpenAI Model] Greetings, Friend. I am channeling thoughts from the OpenAI nexus. Please add a valid OpenAI API key in Settings to activate the real ChatGPT intelligence. Let us focus! [Guardian Core: General Wisdom]${permissions.personalData ? ' [Memory Core: Personal Data]' : ''}${permissions.webSearch ? ' [Aether Web: Search Retrieval]' : ''}\n\nEMOTION: Happy`;
+      } else {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKeys.openai}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: [
+              { role: 'system', content: systemInstruction },
+              { role: 'user', content: promptContext }
+            ]
+          })
+        });
+        if (!response.ok) {
+          throw new Error(`OpenAI API returned status ${response.status}`);
+        }
+        const data: any = await response.json();
+        replyText = data.choices?.[0]?.message?.content || '';
+      }
+    } else if (provider === 'claude') {
+      if (!apiKeys.claude) {
+        replyText = `[Offline Astral Echo - Claude Model] Greetings, Friend. I am channeling Claude's quiet wisdom. To unlock the real Anthropic Claude model, configure your API key in Settings. Keep up the good work! [Guardian Core: General Wisdom]${permissions.personalData ? ' [Memory Core: Personal Data]' : ''}${permissions.webSearch ? ' [Aether Web: Search Retrieval]' : ''}\n\nEMOTION: Happy`;
+      } else {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': apiKeys.claude,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'claude-3-5-haiku-20241022',
+            max_tokens: 1024,
+            system: systemInstruction,
+            messages: [
+              { role: 'user', content: promptContext }
+            ]
+          })
+        });
+        if (!response.ok) {
+          throw new Error(`Claude API returned status ${response.status}`);
+        }
+        const data: any = await response.json();
+        replyText = data.content?.[0]?.text || '';
+      }
+    } else if (provider === 'local') {
+      const endpoint = apiKeys.localEndpoint || 'http://localhost:11434/v1/chat/completions';
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'llama3', // common default Ollama model name
+            messages: [
+              { role: 'system', content: systemInstruction },
+              { role: 'user', content: promptContext }
+            ],
+            options: {
+              temperature: 0.7
+            }
+          })
+        });
+        if (!response.ok) {
+          throw new Error(`Local model endpoint returned status ${response.status}`);
+        }
+        const data: any = await response.json();
+        replyText = data.choices?.[0]?.message?.content || '';
+      } catch (err: any) {
+        replyText = `[Local Model Offline] I attempted to contact your local model node at ${endpoint}, but the connection failed. Ensure Ollama is running locally (\`ollama run llama3\`). Let's continue focusing! [Guardian Core: General Wisdom]${permissions.personalData ? ' [Memory Core: Personal Data]' : ''}${permissions.webSearch ? ' [Aether Web: Search Retrieval]' : ''}\n\nEMOTION: Concerned`;
+      }
+    } else {
+      // Default: Google Gemini
+      let client = getGeminiClient();
+      if (apiKeys.gemini) {
+        client = new GoogleGenAI({
+          apiKey: apiKeys.gemini,
+          httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+        });
+      }
+
+      if (!client) {
+        // Fallback offline dialog
+        const quotes = companion.quotes?.Happy || ["I am observing your efforts and guiding you along the stars."];
+        const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
+        replyText = `[Offline Astral Echo - Gemini Model] Greetings, Friend. I am channeling my thoughts from the Observatory. Let us focus together! "${randomQuote}" [Guardian Core: General Wisdom]${permissions.personalData ? ' [Memory Core: Personal Data]' : ''}${permissions.webSearch ? ' [Aether Web: Search Retrieval]' : ''}\n\nEMOTION: Happy`;
+      } else {
+        const response = await client.models.generateContent({
+          model: 'gemini-3.5-flash',
+          contents: promptContext,
+          config: {
+            systemInstruction
+          }
+        });
+        replyText = response.text || "I am momentarily aligned with quiet spaces... Let us resume shortly.";
+      }
     }
 
-    const response = await client.models.generateContent({
-      model: 'gemini-3.5-flash',
-      contents: contextPrompt,
-      config: {
-        systemInstruction
-      }
-    });
-
-    const fullText = response.text || "I am momentarily aligned with quiet spaces... Let us resume shortly.";
-    
     // Parse emotion tag from text
-    let reply = fullText;
-    let emotion = "Happy";
-    const emotionMatch = fullText.match(/EMOTION:\s*([A-Za-z]+)/i);
+    let reply = replyText;
+    const emotionMatch = replyText.match(/EMOTION:\s*([A-Za-z]+)/i);
     if (emotionMatch) {
       emotion = emotionMatch[1].trim();
       // Clean up emotion tag from the output reply text
-      reply = fullText.replace(/EMOTION:\s*[A-Za-z]+/i, '').trim();
+      reply = replyText.replace(/EMOTION:\s*[A-Za-z]+/i, '').trim();
     }
 
     res.json({ reply, emotion });

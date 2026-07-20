@@ -12,6 +12,8 @@ import ref1 from '../../assets/infinity_ascendant_ref1.jpg';
 import ref2 from '../../assets/infinity_ascendant_ref2.jpg';
 import steampunk3D from '../../assets/steampunk_3d.png';
 import infinity3D from '../../assets/infinity_3d.png';
+import { Companion3DScene } from './Companion3DScene';
+import { voice } from '../utils/voice';
 
 interface CompanionLiveViewProps {
   state: AppState;
@@ -38,7 +40,7 @@ export const CompanionLiveView: React.FC<CompanionLiveViewProps> = ({
   const posY = state.companionPositionY ?? 0;
   const renderingMode = state.companionRenderingMode || 
     (equippedId === 'infinity-ascendant' 
-      ? 'sprite' 
+      ? '3d' 
       : equippedId === 'steampunk-sentinel' 
         ? '3d' 
         : 'vector');
@@ -112,6 +114,9 @@ export const CompanionLiveView: React.FC<CompanionLiveViewProps> = ({
   const [summoning, setSummoning] = useState(false);
   const [summonName, setSummonName] = useState('');
   
+  const [questCompleteParticles, setQuestCompleteParticles] = useState<{ id: number; x: number; y: number }[]>([]);
+  const [isInitialGreeting, setIsInitialGreeting] = useState(true);
+  
   const widgetRef = useRef<HTMLDivElement>(null);
   const bubbleTimerRef = useRef<NodeJS.Timeout | null>(null);
   const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -183,9 +188,14 @@ export const CompanionLiveView: React.FC<CompanionLiveViewProps> = ({
   // Auto detect emotion based on recent state metrics or events
   useEffect(() => {
     if (overrideEmotion) {
+      setIsInitialGreeting(false);
       setEmotion(overrideEmotion);
       triggerDialogueForEmotion(overrideEmotion);
       return;
+    }
+
+    if (isInitialGreeting) {
+      return; // Do not override the welcome back or return from absence greeting
     }
 
     const recentActivities = state.activities || [];
@@ -204,15 +214,83 @@ export const CompanionLiveView: React.FC<CompanionLiveViewProps> = ({
 
     setEmotion(nextEmotion);
     triggerDialogueForEmotion(nextEmotion);
-  }, [overrideEmotion, state.player?.level, state.player?.currentStreak, equippedId]);
+  }, [overrideEmotion, state.player?.level, state.player?.currentStreak, equippedId, isInitialGreeting]);
+
+  // Initial welcome back or absence duration check greeting
+  const didGreetRef = useRef(false);
+  useEffect(() => {
+    // Only greet once per session/equip
+    didGreetRef.current = false;
+  }, [equippedId]);
+
+  useEffect(() => {
+    if (didGreetRef.current) return;
+    didGreetRef.current = true;
+    setIsInitialGreeting(true);
+
+    const lastActive = state.lastActiveDate;
+    const todayStr = new Date().toISOString().split('T')[0];
+    
+    let daysDiff = 0;
+    if (lastActive) {
+      const lastDateObj = new Date(lastActive);
+      const todayDateObj = new Date(todayStr);
+      const msDiff = todayDateObj.getTime() - lastDateObj.getTime();
+      daysDiff = Math.floor(msDiff / (1000 * 60 * 60 * 24));
+    }
+
+    setTimeout(() => {
+      setEmotion('Greeting');
+      if (daysDiff >= 2) {
+        // Returned after long absence!
+        const absenceQuotes = companion.quotes.Absence || companion.quotes.Greeting || ["Welcome back, traveler."];
+        const randomQuote = absenceQuotes[Math.floor(Math.random() * absenceQuotes.length)];
+        setBubbleText(randomQuote);
+        sfx.playQuestComplete();
+      } else {
+        // Welcome back greeting
+        const greetingQuotes = companion.quotes.Greeting || ["Welcome back, Hero."];
+        const randomQuote = greetingQuotes[Math.floor(Math.random() * greetingQuotes.length)];
+        setBubbleText(randomQuote);
+        sfx.playLevelUp();
+      }
+      setBubbleVisible(true);
+
+      // Dismiss greeting phase after 6 seconds to resume idle tracking
+      setTimeout(() => {
+        setIsInitialGreeting(false);
+      }, 6000);
+    }, 1000);
+  }, [equippedId]);
 
   // Handle custom messages passed from parent
   useEffect(() => {
     if (customMessage) {
+      setIsInitialGreeting(false);
       setBubbleText(customMessage);
       setBubbleVisible(true);
       sfx.playQuestComplete();
       
+      // Trigger golden particle burst on task completion or level up
+      if (customMessage.includes('Cleared task') || customMessage.includes('CONGRATULATIONS') || customMessage.includes('ascended')) {
+        const particlesList: { id: number; x: number; y: number }[] = [];
+        for (let i = 0; i < 24; i++) {
+          particlesList.push({
+            id: Math.random() + i,
+            x: 10 + Math.random() * 80,
+            y: 60 + Math.random() * 25
+          });
+        }
+        setQuestCompleteParticles(particlesList);
+        
+        // Custom pride emotion trigger
+        setEmotion('Proud');
+
+        setTimeout(() => {
+          setQuestCompleteParticles([]);
+        }, 3000);
+      }
+
       if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
       bubbleTimerRef.current = setTimeout(() => {
         setBubbleVisible(false);
@@ -220,6 +298,22 @@ export const CompanionLiveView: React.FC<CompanionLiveViewProps> = ({
       }, 7000);
     }
   }, [customMessage]);
+
+  // Voice Synthesis Trigger on bubble text updates
+  useEffect(() => {
+    if (bubbleVisible && bubbleText && equippedId === 'infinity-ascendant') {
+      voice.speak(bubbleText);
+    } else {
+      voice.stop();
+    }
+  }, [bubbleText, bubbleVisible, equippedId]);
+
+  // Make sure we stop voice on unmount
+  useEffect(() => {
+    return () => {
+      voice.stop();
+    };
+  }, []);
 
   const triggerDialogueForEmotion = (emo: string) => {
     const quotes = companion.quotes[emo] || companion.quotes['Happy'] || ["Keep focused on your path!"];
@@ -235,8 +329,9 @@ export const CompanionLiveView: React.FC<CompanionLiveViewProps> = ({
 
   const handleCompanionClick = (e: React.MouseEvent) => {
     if (e.detail === 2) return;
+    setIsInitialGreeting(false);
     sfx.playSkillUnlock();
-    const emotions = Object.keys(companion.quotes);
+    const emotions = Object.keys(companion.quotes).filter(k => k !== 'Absence');
     const randomEmo = emotions[Math.floor(Math.random() * emotions.length)];
     setEmotion(randomEmo);
     triggerDialogueForEmotion(randomEmo);
@@ -244,6 +339,7 @@ export const CompanionLiveView: React.FC<CompanionLiveViewProps> = ({
 
   // Double Click Special Animation Handler
   const handleDoubleClick = () => {
+    setIsInitialGreeting(false);
     sfx.playLevelUp();
     const anims = ['spin-once', 'bounce-intense', 'heartbeat-giant'];
     const randomAnim = anims[Math.floor(Math.random() * anims.length)];
@@ -1628,6 +1724,19 @@ export const CompanionLiveView: React.FC<CompanionLiveViewProps> = ({
   };
 
   const renderCompanion3D = () => {
+    if (equippedId === 'infinity-ascendant') {
+      return (
+        <div className="w-full h-full flex items-center justify-center relative select-none">
+          <Companion3DScene
+            state={state}
+            emotion={emotion}
+            mousePos={mousePos}
+            widgetCenter={widgetCenter}
+          />
+        </div>
+      );
+    }
+
     const imgSrc = equippedId === 'steampunk-sentinel' ? steampunk3D : infinity3D;
     const glowColor = equippedId === 'steampunk-sentinel' ? 'rgba(217,119,6,0.5)' : 'rgba(16,185,129,0.5)';
     const borderColor = equippedId === 'steampunk-sentinel' ? '#d97706' : '#10b981';
@@ -1738,6 +1847,10 @@ export const CompanionLiveView: React.FC<CompanionLiveViewProps> = ({
         @keyframes slideIn {
           from { transform: translateY(30px); opacity: 0; }
           to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes float-up {
+          0% { transform: translateY(0) scale(0.5); opacity: 1; }
+          100% { transform: translateY(-130px) scale(1.3); opacity: 0; }
         }
       `}</style>
 
@@ -2108,6 +2221,22 @@ export const CompanionLiveView: React.FC<CompanionLiveViewProps> = ({
           }}
         ></div>
       </div>
+
+      {/* Golden Quest Complete Particles */}
+      {questCompleteParticles.map(p => (
+        <span
+          key={p.id}
+          className="absolute w-1.5 h-1.5 rounded-full bg-amber-400 opacity-90 pointer-events-none animate-[float-up_1.8s_ease-out_infinite]"
+          style={{
+            left: `${p.x}%`,
+            top: `${p.y}%`,
+            filter: 'drop-shadow(0 0 4px #eab308)',
+            animationDelay: `${Math.random() * 0.4}s`,
+            animationDuration: `${1.2 + Math.random() * 1.0}s`,
+            animationIterationCount: 1
+          }}
+        />
+      ))}
     </div>
   );
 };
